@@ -1,11 +1,13 @@
+import os
 import sys
 import json
 import time
 import urllib.request
 
-BASE = "http://127.0.0.1:4799"
-AUTH = "Basic " + open("/tmp/opencode/auth4799.txt").read().strip()
-ROOT = "/tmp/opencode/harness"
+BASE = os.environ.get("PLAN_GUARD_API", "http://127.0.0.1:4799")
+AUTH_FILE = os.environ.get("PLAN_GUARD_AUTH", "/tmp/opencode/auth4799.txt")
+ROOT = os.environ.get("PLAN_GUARD_ROOT", "/tmp/opencode/harness")
+AUTH = "Basic " + open(AUTH_FILE).read().strip()
 
 
 def call(method, path, body=None, timeout=300):
@@ -74,6 +76,9 @@ def new_command_tools(sid, before):
 
 def main():
     status, body = call("POST", "/api/session", {"location": {"directory": ROOT}})
+    if status != 200:
+        print("SESSION CREATE FAILED", status, body[:500])
+        return
     sid = json.loads(body)["data"]["id"]
     call("POST", f"/api/session/{sid}/agent", {"agent": "plan"})
     print("SESSION", sid)

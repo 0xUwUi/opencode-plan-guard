@@ -37,11 +37,9 @@ cp note.txt dup.txt                 # 成功复制
 | 路径 | 说明 |
 |---|---|
 | `src/plan-guard.ts` | **插件本体**，与 `~/.config/opencode/plugins/plan-guard.ts` 一致 |
-| `prototype/prototype.ts` | 早期原型（会误杀 `git status`），保留作历史 |
-| `plan-guard-tests.md` | 手工验收用例表 |
-| `harness.py` | 通过 HTTP API 驱动会话、逐条执行用例的测试脚本 |
-| `harness4.py` | 改进版：按 tool call id 精确配对，支持复合命令 |
-| `run_cases.py` | 用例运行器，输出 PASS/FAIL 汇总 |
+| `tests/harness.py` | 通过 HTTP API 驱动会话，按 tool call id 精确配对，逐条执行命令 |
+| `tests/run_cases.py` | 用例表 + PASS/FAIL 判定，是唯一的用例来源 |
+| `tests/setup_fixture.py` | 重置验收夹具（`note.txt` / `empty.txt`，清掉上一轮残骸） |
 
 ## 安装
 
@@ -50,6 +48,30 @@ cp src/plan-guard.ts ~/.config/opencode/plugins/
 ```
 
 依赖：`~/.config/opencode/package.json` 需有 `"@opencode/plugin": "2.1.2"`（V2 API）。
+
+## 跑验收用例
+
+用例需要真实跑一遍 OpenCode，所以要先有一个带密码的本地服务：
+
+```sh
+# 1. 准备夹具
+python3 tests/setup_fixture.py
+
+# 2. 起被测服务（密码会打印在 stdout）
+opencode serve --port 4799
+#    server password xxxxx  →  写入 /tmp/opencode/auth4799.txt
+
+# 3. 跑全部内置用例
+python3 tests/run_cases.py
+
+# 也可以只跑指定命令，此时不判定期望值，只打印实际结果
+python3 tests/run_cases.py 'ls -la' 'rm note.txt'
+```
+
+路径与端口可用环境变量覆盖：`PLAN_GUARD_API`、`PLAN_GUARD_AUTH`、`PLAN_GUARD_ROOT`。
+
+每条用例的判定是三段式的：模型确实调到了 shell（`ack`）、命令原文一致、
+以及结果是 `DENY` / `EXEC` / `ERROR` 中的期望值。任一不满足即 FAIL。
 
 ## 验证结果
 
@@ -61,7 +83,7 @@ Error: Blocked by plan-guard: Plan mode is read-only, and
 "sed -i 's/alpha/beta/' note.txt" is not a recognized read-only command.
 ```
 
-文件未被修改，`git status` 等只读命令正常放行。
+`tests/run_cases.py` 内置 31 条用例（17 条期望拦截、14 条期望放行）。
 
 ## 已知限制
 
